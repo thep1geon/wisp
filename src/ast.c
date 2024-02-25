@@ -12,6 +12,7 @@ AST_Vec* ast_vec_new() {
     AST_Vec* vec = malloc(sizeof(AST_Vec));
     vec->cap = 64;
     vec->len = 0;
+
     vec->at = malloc(vec->cap * sizeof(AST*));
     return vec;
 }
