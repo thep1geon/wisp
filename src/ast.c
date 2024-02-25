@@ -27,9 +27,10 @@ void ast_vec_append(AST_Vec* vec, AST* item) {
 }
 
 void ast_vec_free(AST_Vec* vec) {
-    // for (usize i = 0; i < vec->len; ++i) {
-    //     ast_free(vec->at[i]);
-    // }
+    for (usize i = 0; i < vec->len; ++i) {
+        ast_free(vec->at[i]);
+    }
+
     free(vec->at);
     free(vec);
 }
@@ -124,13 +125,7 @@ static Value* ast_eval_no_eval(AST* ast, Env* env, Gc* gc) {
 
             String s = string_malloc_str(data.sym.data);
 
-            if (data.sym.was_alloced) {
-                free(data.sym.data);
-            }
-
-            free(ast);
-            Value* val = value_alloc(VALUE_NEW(VALUE_SYM, s));
-            gc_add_value(gc, val);
+            Value* val = value_alloc(VALUE_NEW(VALUE_SYM, s), gc);
             return val;
         }
         case AST_LIST: {
@@ -142,10 +137,7 @@ static Value* ast_eval_no_eval(AST* ast, Env* env, Gc* gc) {
                 value_vec_append(vec, ast_eval(data.vec->at[i], env, gc));
             }
 
-            free(ast);
-            ast_vec_free(data.vec);
-            Value* val = value_alloc(VALUE_NEW(VALUE_LIST, vec));
-            gc_add_value(gc, val);
+            Value* val = value_alloc(VALUE_NEW(VALUE_LIST, vec), gc);
             return val;
         }
 
@@ -157,8 +149,7 @@ static Value* ast_eval_no_eval(AST* ast, Env* env, Gc* gc) {
         }
 
         default: {
-            Value* v = value_alloc(VALUE_NEW(VALUE_NIL, 0));
-            gc_add_value(gc, v);
+            Value* v = value_alloc(VALUE_NEW(VALUE_NIL, 0), gc);
             return v;
         }
     }
@@ -173,8 +164,7 @@ Value* ast_eval(AST* ast, Env* env, Gc* gc) {
         case AST_PROG: {
             struct AST_PROG data = ast->data.AST_PROG;
 
-            Value* v = value_alloc(VALUE_NEW(VALUE_NIL, 0));
-            gc_add_value(gc, v);
+            Value* v = value_alloc(VALUE_NEW(VALUE_NIL, 0), gc);
             for (usize i = 0; i < data.vec->len; ++i) {
                 v = ast_eval(data.vec->at[i], env, gc);
 
@@ -183,8 +173,6 @@ Value* ast_eval(AST* ast, Env* env, Gc* gc) {
                 }
             }
 
-            ast_vec_free(data.vec);
-            free(ast);
             return v;
         }
         case AST_LIST: {
@@ -193,20 +181,22 @@ Value* ast_eval(AST* ast, Env* env, Gc* gc) {
             // Treat the first symbol in a list as a function
             
             if (data.vec->len == 0) {
-                ast_vec_free(data.vec);
-                free(ast);
-                Value* v = value_alloc(VALUE_NEW(VALUE_NIL, 0));
-                gc_add_value(gc, v);
+                ast_free(ast);
+                Value* v = value_alloc(VALUE_NEW(VALUE_NIL, 0), gc);
                 return v;
             }
 
             Value* sym_val = ast_eval(data.vec->at[0], env, gc);
 
-            WispFunc func;
+            union {
+                WispFunc native;
+                Lambda lambda;
+            } func;
             if (sym_val->tag == VALUE_NATIVE) {
-                func = VALUE_GET(sym_val, VALUE_NATIVE);
+                func.native = VALUE_GET(sym_val, VALUE_NATIVE);
+            }  else  if (sym_val->tag == VALUE_LAMBDA){
+                func.lambda = VALUE_GET(sym_val, VALUE_LAMBDA);
             } else {
-                // ast_free(ast);
                 ASSERT(false, "First symbol must be a function");
             }
 
@@ -216,10 +206,12 @@ Value* ast_eval(AST* ast, Env* env, Gc* gc) {
                 value_vec_append(vec, val);
             }
 
-            ast_vec_free(data.vec);
-            free(ast);
-
-            Value* v = func(gc, env, *vec);
+            Value* v;
+            if (sym_val->tag == VALUE_NATIVE) {
+                v = func.native(gc, env, *vec);
+            } else {
+                v = lambda_call(&func.lambda, gc, env, vec);
+            }
 
             free(vec->at);
             free(vec);
@@ -231,50 +223,41 @@ Value* ast_eval(AST* ast, Env* env, Gc* gc) {
             struct AST_LIST params = data.params->data.AST_LIST;
             AST* body = AST_NEW(AST_PROG, data.body);
             Lambda lambda = {
-                .env = env_new(env),
                 .params = malloc(sizeof(String) * params.vec->len),
+                .argc = params.vec->len,
                 .body = body,
             };
 
+            for (usize i = 0; i < lambda.argc; ++i) {
+                lambda.params[i] = string_malloc_str(params.vec->at[i]->data.AST_SYM.sym.data);
+            }
             
+            Value* v = value_alloc(VALUE_NEW(VALUE_LAMBDA, lambda), gc);
 
-            Value* v = value_alloc(VALUE_NEW(VALUE_LAMBDA, lambda));
-            gc_add_value(gc, v);
-            ast_free(ast->data.AST_FN.params);
-            free(ast);
             return v;
         }
         case AST_NUMBER: {
             struct AST_NUMBER data = ast->data.AST_NUMBER;
             i64 num = data.val;
 
-            free(ast);
-
-            Value* v = value_alloc(VALUE_NEW(VALUE_INTEGER, num));
-            gc_add_value(gc, v);
+            Value* v = value_alloc(VALUE_NEW(VALUE_INTEGER, num), gc);
             return v;
         }
         case AST_SYM: {
             struct AST_SYM data = ast->data.AST_SYM;
 
-            if (!env_has(env, data.sym)) {
+            if (!env_parent_has(env, data.sym)) {
                 // TODO Figure out how to free all the memory
                 // when an unknown function is called and the
                 // program needs to crash
                 ast_free(ast);
-                Value* v = value_alloc(VALUE_NEW(VALUE_NIL, 0));
-                gc_add_value(gc, v);
+                Value* v = value_alloc(VALUE_NEW(VALUE_NIL, 0), gc);
                 return v;
             }
 
 
-            free(ast);
             Bucket bucket = env_get(env, data.sym);
             Value* val = bucket.val;
-
-            if (data.sym.was_alloced) {
-                free(data.sym.data);
-            }
 
             return val;
         }
@@ -283,25 +266,16 @@ Value* ast_eval(AST* ast, Env* env, Gc* gc) {
 
             String s = string_malloc_str(data.str.data);
 
-            if (data.str.was_alloced) {
-                free(data.str.data);
-            }
-
-            free(ast);
-            Value* val = value_alloc(VALUE_NEW(VALUE_SYM, s));
-            gc_add_value(gc, val);
+            Value* val = value_alloc(VALUE_NEW(VALUE_SYM, s), gc);
             return val;
         }
         case AST_NIL: {
-            free(ast);
-            Value* val = value_alloc(VALUE_NEW(VALUE_NIL, 0));
-            gc_add_value(gc, val);
+            Value* val = value_alloc(VALUE_NEW(VALUE_NIL, 0), gc);
             return val;
         }
     }
 
-    Value* val = value_alloc(VALUE_NEW(VALUE_NIL, 0));
-    gc_add_value(gc, val);
+    Value* val = value_alloc(VALUE_NEW(VALUE_NIL, 0), gc);
     return val;
 }
 
@@ -310,21 +284,20 @@ void ast_free(AST* ast) {
     switch (ast->tag) {
         case AST_PROG: {
             struct AST_PROG data = ast->data.AST_PROG;
-
             ast_vec_free(data.vec);
             free(ast);
             return;
         }
         case AST_FN: {
             struct AST_FN data = ast->data.AST_FN;
+            struct AST_LIST params = data.params->data.AST_LIST;
+
             ast_free(data.params);
-            ast_vec_free(data.body);
             free(ast);
             return;
         }
         case AST_LIST: {
             struct AST_LIST data = ast->data.AST_LIST;
-
             ast_vec_free(data.vec);
             free(ast);
             return;
@@ -338,16 +311,14 @@ void ast_free(AST* ast) {
         case AST_SYM: {
             struct AST_SYM data = ast->data.AST_SYM;
 
-            if (data.sym.was_alloced) {
-                free(data.sym.data);
-            }
+            string_free(&data.sym);
             free(ast);
             return;
         }
         case AST_STR: {
             struct AST_STR data = ast->data.AST_STR;
 
-            free(data.str.data);
+            string_free(&data.str);
             free(ast);
             return;
         }

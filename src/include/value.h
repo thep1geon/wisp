@@ -15,6 +15,7 @@ typedef struct Value_Vec Value_Vec;
 typedef struct Env Env;
 typedef struct Gc Gc;
 typedef struct Lambda Lambda;
+typedef struct Err Err;
 
 typedef Value*(*WispFunc)(Gc* gc, Env* env, Value_Vec args);
 
@@ -28,10 +29,19 @@ void value_vec_free(Value_Vec* vec);
 void value_vec_append(Value_Vec* vec, Value* item);
 
 struct Lambda {
-    Env* env;
     String* params;
     u32 argc;
     AST* body;
+};
+Value* lambda_call(Lambda* lambda, Gc* parent_gc, Env* parent, Value_Vec* args);
+
+struct Err {
+    enum {
+        NONE,   
+        ERR,
+    } ErrType;
+
+    String msg; 
 };
 
 struct Value {
@@ -44,6 +54,7 @@ struct Value {
         VALUE_LIST,
         VALUE_LAMBDA,
         VALUE_NIL,
+        VALUE_ERR,
     } tag;
 
     union {
@@ -58,24 +69,27 @@ struct Value {
         
         struct VALUE_SYM
         { String val; } VALUE_SYM;
-        
-        struct VALUE_NATIVE
-        { WispFunc val; } VALUE_NATIVE;
 
         struct VALUE_LIST
         { Value_Vec* val; } VALUE_LIST;
-
-        struct VALUE_NIL
-        { u8 val; } VALUE_NIL;
+        
+        struct VALUE_NATIVE
+        { WispFunc val; } VALUE_NATIVE;
         
         struct VALUE_LAMBDA
         { Lambda val; } VALUE_LAMBDA;
+
+        struct VALUE_NIL
+        { u8 val; } VALUE_NIL;
+
+        struct VALUE_ERR
+        { Err val; } VALUE_ERR;
     } val;
 
     bool marked;
 };
 
-Value* value_alloc(Value val);
+Value* value_alloc(Value val, Gc* gc);
 void value_print(Value* val);
 void value_mark(Value* val);
 void value_unmark(Value* val);

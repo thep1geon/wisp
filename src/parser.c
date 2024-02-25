@@ -21,7 +21,7 @@ static AST* parse_let(Parser* p);
 
 
 static void parser_advance(Parser* p) {
-    string_free(p->prev.lexeme);
+    string_free(&p->prev.lexeme);
 
     p->prev = p->curr;
     p->curr = p->next;
@@ -50,7 +50,9 @@ void parser_set_src(Parser* parser, String src) {
 }
 
 static AST* parse_fn(Parser* p) {
+    parser_advance(p);
     AST* params = parse_list(p);
+    parser_advance(p);
     if (params->tag != AST_LIST) {
         ast_free(p->ast);
         free(params);
@@ -59,8 +61,9 @@ static AST* parse_fn(Parser* p) {
 
     AST_Vec* body = ast_vec_new();
     while (p->curr.type != Token_RParen) {
-        ast_vec_append(body, parse_list(p));
+        ast_vec_append(body, parse_form(p));
     }
+    parser_advance(p);
 
     return AST_NEW(AST_FN, params, body);
 }
@@ -136,18 +139,9 @@ static AST* parse_list(Parser* p) {
             item = parse_form(p);
         }
         else if (p->curr.type == Token_EOF) {
-            if (p->prev.lexeme.data) {
-                free(p->prev.lexeme.data);
-                p->prev.lexeme.data = NULL;
-            }
-            if (p->curr.lexeme.data) {
-                free(p->curr.lexeme.data);
-                p->curr.lexeme.data = NULL;
-            }
-            if (p->next.lexeme.data) {
-                free(p->next.lexeme.data);
-                p->next.lexeme.data = NULL;
-            }
+            string_free(&p->prev.lexeme);
+            string_free(&p->curr.lexeme);
+            string_free(&p->next.lexeme);
 
             ast_free(list);
             ast_free(p->ast);
@@ -202,8 +196,8 @@ void parser_parse(Parser* parser) {
         parser_advance(parser);
     }
 
-    string_free(parser->prev.lexeme);
-    string_free(parser->curr.lexeme);
-    string_free(parser->next.lexeme);
+    string_free(&parser->prev.lexeme);
+    string_free(&parser->curr.lexeme);
+    string_free(&parser->next.lexeme);
 }
 

@@ -17,6 +17,27 @@ static u64 hash(String key) {
     return hash;
 }
 
+Env* env_new(Env* parent) {
+    Env* env = malloc(sizeof(Env));
+    env->len = ENV_LEN;
+    env->data = malloc(ENV_LEN * sizeof(Bucket));
+    env->parent = parent;
+
+    for (usize i = 0; i < ENV_LEN; ++i) {
+        env->data[i] = (Bucket) {NULL, string(""), false, 0};
+    }
+
+    return env;
+}
+
+void env_free(Env* env) {
+    if (env) {
+        free(env->data);
+        free(env);
+    } 
+}
+
+
 i64 env_get_hash(Env* env, String key) {
     u64 hash_val = hash(key); 
     u64 first_hash = hash_val;
@@ -40,26 +61,6 @@ i64 env_get_hash(Env* env, String key) {
     return hash_val;
 }
 
-Env* env_new(Env* parent) {
-    Env* env = malloc(sizeof(Env));
-    env->len = ENV_LEN;
-    env->data = malloc(ENV_LEN * sizeof(Bucket));
-    env->parent = parent;
-
-    for (usize i = 0; i < ENV_LEN; ++i) {
-        env->data[i] = (Bucket) {NULL, string(""), false, 0};
-    }
-
-    return env;
-}
-
-void env_free(Env* env) {
-    if (env) {
-        free(env->data);
-        free(env);
-    } 
-}
-
 Bucket env_get(Env* env, String key) {
     if (env_has(env, key)) {
         return env->data[env_get_hash(env, key)];
@@ -73,11 +74,13 @@ Bucket env_get(Env* env, String key) {
 }
 
 static bool env_insert_index(Env* env, u64 index, String key, Value* val) {
-    if (env->data[index].occupied) {
+    Bucket* bucket = &env->data[index];
+    
+    if (bucket->occupied && !string_eq(bucket->ident, key)) {
         return false; 
     }
 
-    env->data[index] = (Bucket){
+    *bucket = (Bucket){
         .val = val, 
         .ident = key, 
         .occupied = true,
@@ -95,17 +98,23 @@ void env_insert(Env* env, String key, Value* val) {
     }
 }
 
-bool env_has(Env* env, String key) {
+bool env_parent_has(Env* env, String key) {
     i64 hash_val = env_get_hash(env, key);
+
     if (hash_val < 0) {
-        if (env->parent) {
-            return env_has(env->parent, key);
+        if (env->parent == NULL) {
+            return false;
         }
 
-        return false;
-    };
+        return env_parent_has(env->parent, key);
+    }
 
     return true;
+}
+
+bool env_has(Env* env, String key) {
+    i64 hash_val = env_get_hash(env, key);
+    return hash_val >= 0;
 }
 
 void env_print(Env* env) {

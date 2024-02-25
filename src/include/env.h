@@ -23,6 +23,7 @@ Env*     env_new(Env* parent);
 void     env_free(Env* env);
 Bucket   env_get(Env* env, String key);
 void     env_insert(Env* env, String key, Value* val);
+bool     env_parent_has(Env* env, String key);
 bool     env_has(Env* env, String key);
 void     bucket_print(Bucket bucket);
 

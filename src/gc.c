@@ -94,7 +94,7 @@ void gc_collect(Gc* gc, Env* env) {
 
         if (!gc->at[i]->marked) {
             value_free(gc->at[i]);
-            gc->at[i] = value_alloc(VALUE_NEW(VALUE_NIL, 0));
+            gc->at[i] = value_alloc(VALUE_NEW(VALUE_NIL, 0), NULL);
         }
     }
 

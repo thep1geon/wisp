@@ -1,18 +1,21 @@
 #include "include/wispfunc.h"
 #include "include/env.h"
-#include "include/gc.h"
 #include "include/value.h"
 #include <Pigeon/defines.h>
 #include <stdio.h>
 
 #define RETURN_VALUE(V, gc) do {\
-    Value* v =  value_alloc(V);\
-    gc_add_value(gc, v);\
+    Value* v =  value_alloc(V, gc);\
     return v;\
 } while (0);
 
 Value* wisp_add(Gc* gc, Env* env, Value_Vec args) {
     (void)env;
+
+    if (args.len == 0) {
+        RETURN_VALUE(VALUE_NEW(VALUE_NIL, 0), gc);
+    }
+
     i64 acc = 0;
 
     for (usize i = 0; i < args.len; ++i) {
@@ -24,6 +27,11 @@ Value* wisp_add(Gc* gc, Env* env, Value_Vec args) {
 
 Value* wisp_sub(Gc* gc, Env* env, Value_Vec args) {
     (void)env;
+
+    if (args.len == 0) {
+        RETURN_VALUE(VALUE_NEW(VALUE_NIL, 0), gc);
+    }
+
     i64 acc = VALUE_GET(args.at[0], VALUE_INTEGER);
 
     if (args.len == 1) {
@@ -39,6 +47,11 @@ Value* wisp_sub(Gc* gc, Env* env, Value_Vec args) {
 
 Value* wisp_div(Gc* gc, Env* env, Value_Vec args) {
     (void)env;
+
+    if (args.len == 0) {
+        RETURN_VALUE(VALUE_NEW(VALUE_NIL, 0), gc);
+    }
+
     f64 top = VALUE_GET(args.at[0], VALUE_INTEGER);
     f64 bottom = 1;
 
@@ -51,6 +64,11 @@ Value* wisp_div(Gc* gc, Env* env, Value_Vec args) {
 
 Value* wisp_mul(Gc* gc, Env* env, Value_Vec args) {
     (void)env;
+
+    if (args.len == 0) {
+        RETURN_VALUE(VALUE_NEW(VALUE_NIL, 0), gc);
+    }
+
     i64 acc = VALUE_GET(args.at[0], VALUE_INTEGER);
 
     for (usize i = 1; i < args.len; ++i) {
@@ -271,8 +289,7 @@ Value* wisp_range(Gc* gc, Env* env, Value_Vec args) {
     Value_Vec* vec = value_vec_new();
 
     for (i64 i = bottom; i < top; i += step) {
-        Value* number = value_alloc(VALUE_NEW(VALUE_INTEGER, i));
-        gc_add_value(gc, number);
+        Value* number = value_alloc(VALUE_NEW(VALUE_INTEGER, i), gc);
         value_vec_append(vec, number);
     }
 
@@ -294,7 +311,17 @@ Value* wisp_car (Gc* gc, Env* env, Value_Vec args) {
 
 Value* wisp_cdr (Gc* gc, Env* env, Value_Vec args) {
     (void)env;
-    (void)args;
-    printf("Hello from cdr\n");
-    RETURN_VALUE(VALUE_NEW(VALUE_NIL, 0), gc);
+
+    if (args.len != 1 || args.at[0]->tag != VALUE_LIST) {
+        RETURN_VALUE(VALUE_NEW(VALUE_NIL, 0), gc);
+    }
+
+    Value_Vec* list = VALUE_GET(args.at[0], VALUE_LIST);
+    Value_Vec* vec = value_vec_new();
+
+    for (usize i = 1; i < list->len; ++i) {
+        value_vec_append(vec, list->at[i]);
+    }
+
+    RETURN_VALUE(VALUE_NEW(VALUE_LIST, vec), gc);
 }

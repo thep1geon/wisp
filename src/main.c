@@ -10,8 +10,8 @@
 #include "include/wispfunc.h"
 #include "include/value.h"
 #include "include/ast.h"
-#include "include/lexer.h"
 #include "include/parser.h"
+#include "include/lexer.h"
 
 i32 main(i32 argc, char** argv) {
     Arena* arena = arena_new();
@@ -43,7 +43,7 @@ i32 main(i32 argc, char** argv) {
     Gc* gc = gc_new();
 
     if (argc < 2) {
-        // gc_set_mode(gc, REPL);
+        gc_set_mode(gc, REPL);
         lexer = lexer_new(arena, string(""));
         parser = parser_new(arena, lexer);
 
@@ -68,6 +68,8 @@ i32 main(i32 argc, char** argv) {
             // ast_print(parser->ast);
 
             Value* val = ast_eval(parser->ast, env, gc);
+            ast_free(parser->ast);
+
 
             printf("\n");
             value_print(val);
@@ -89,6 +91,7 @@ i32 main(i32 argc, char** argv) {
 
         parser_parse(parser);
         ast_eval(parser->ast, env, gc);
+        ast_free(parser->ast);
         free(src.data);
     }
 

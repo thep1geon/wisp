@@ -1,7 +1,7 @@
 SRC_DIR := src
 OBJ_DIR := obj
 TARGET_DIR := bin
-TARGET := $(TARGET_DIR)/main
+TARGET := $(TARGET_DIR)/wisp
 
 # Find all .c files in subdirectories of SRC_DIR
 SRC_FILES := $(shell find $(SRC_DIR) -type f -name "*.c")
