@@ -29,11 +29,12 @@ void value_vec_free(Value_Vec* vec);
 void value_vec_append(Value_Vec* vec, Value* item);
 
 struct Lambda {
+    Env* env;
+    AST* body;
     String* params;
     u32 argc;
-    AST* body;
 };
-Value* lambda_call(Lambda* lambda, Gc* parent_gc, Env* parent, Value_Vec* args);
+Value* lambda_call(Lambda* lambda, Gc* parent_gc, Value_Vec* args);
 
 struct Err {
     enum {
@@ -77,7 +78,7 @@ struct Value {
         { WispFunc val; } VALUE_NATIVE;
         
         struct VALUE_LAMBDA
-        { Lambda val; } VALUE_LAMBDA;
+        { Lambda* val; } VALUE_LAMBDA;
 
         struct VALUE_NIL
         { u8 val; } VALUE_NIL;
@@ -90,6 +91,7 @@ struct Value {
 };
 
 Value* value_alloc(Value val, Gc* gc);
+Value* value_clone(Value* val, Gc* gc);
 void value_print(Value* val);
 void value_mark(Value* val);
 void value_unmark(Value* val);

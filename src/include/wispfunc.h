@@ -21,6 +21,7 @@ Value* wisp_defun   (Gc* gc, Env* env, Value_Vec args);
 Value* wisp_range   (Gc* gc, Env* env, Value_Vec args);
 Value* wisp_car     (Gc* gc, Env* env, Value_Vec args);
 Value* wisp_cdr     (Gc* gc, Env* env, Value_Vec args);
+Value* wisp_append  (Gc* gc, Env* env, Value_Vec args);
 
 #endif  //__WISP_FUNC_H
 

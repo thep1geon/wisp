@@ -38,7 +38,9 @@ i32 main(i32 argc, char** argv) {
     env_insert(env, string("car"),     &VALUE_NEW(VALUE_NATIVE, wisp_car));
     env_insert(env, string("cdr"),     &VALUE_NEW(VALUE_NATIVE, wisp_cdr));
     env_insert(env, string("range"),   &VALUE_NEW(VALUE_NATIVE, wisp_range));
+    env_insert(env, string("append"),  &VALUE_NEW(VALUE_NATIVE, wisp_append));
     env_insert(env, string("t"),       &VALUE_NEW(VALUE_INTEGER, 1));
+    env_insert(env, string("nil"),     &VALUE_NEW(VALUE_NIL, 0));
 
     Gc* gc = gc_new();
 

@@ -33,23 +33,21 @@ void value_vec_append(Value_Vec* vec, Value* item) {
     vec->at[vec->len++] = (item);
 }
 
-Value* lambda_call(Lambda* lambda, Gc* parent_gc, Env* parent, Value_Vec* args) {
+Value* lambda_call(Lambda* lambda, Gc* parent_gc, Value_Vec* args) {
+    if (lambda->argc != args->len) {
+        return value_alloc(VALUE_NEW(VALUE_NIL, 0), parent_gc);
+    }
+
     Gc* gc = gc_new();
-    Env* env = env_new(parent);
     gc_set_mode(gc, REPL);
 
-    if (lambda->argc != args->len) {
-        return value_alloc(VALUE_NEW(VALUE_NIL, 0), gc);
-    }
-
     for (usize i = 0; i < args->len; ++i) {
-        env_insert(env, lambda->params[i], args->at[i]);
+        env_insert(lambda->env, lambda->params[i], args->at[i]);
     }
 
-    Value* v = ast_eval(lambda->body, env, gc);
-    Value* ret_val = value_alloc(*v, parent_gc);
+    Value* v = ast_eval(lambda->body, lambda->env, gc);
+    Value* ret_val = value_clone(v, parent_gc);
 
-    env_free(env);    
     gc_free(gc);
 
     return ret_val;
@@ -153,15 +151,17 @@ void value_free(Value* val) {
         }
 
         case VALUE_LAMBDA: {
-            Lambda lambda = VALUE_GET(val, VALUE_LAMBDA);
+            Lambda* lambda = VALUE_GET(val, VALUE_LAMBDA);
 
-            ast_free(lambda.body);
+            ast_free(lambda->body);
             
-            for (usize i = 0; i < lambda.argc; ++i) {
-                string_free(&lambda.params[i]);
+            for (usize i = 0; i < lambda->argc; ++i) {
+                string_free(&lambda->params[i]);
             }
 
-            free(lambda.params);
+            free(lambda->params);
+            env_free(lambda->env);
+            free(lambda);
 
             goto __value_free;
         }
@@ -175,6 +175,7 @@ __value_free:
 
 void value_mark(Value* val) {
     switch (val->tag) {
+        case VALUE_LAMBDA:
         case VALUE_SYM:
         case VALUE_STR:
         case VALUE_NIL:
@@ -182,7 +183,6 @@ void value_mark(Value* val) {
         case VALUE_NATIVE:
         case VALUE_REAL:
         case VALUE_ERR:
-        case VALUE_LAMBDA:
             val->marked = true;
             return;
 
@@ -199,13 +199,13 @@ void value_mark(Value* val) {
 
 void value_unmark(Value* val) {
     switch (val->tag) {
+        case VALUE_LAMBDA:
         case VALUE_SYM:
         case VALUE_STR:
         case VALUE_NIL:
         case VALUE_INTEGER:
         case VALUE_NATIVE:
         case VALUE_REAL:
-        case VALUE_LAMBDA:
         case VALUE_ERR:
             val->marked = false;
             return;
@@ -218,4 +218,64 @@ void value_unmark(Value* val) {
             val->marked = false;
         }
     }
+}
+
+// Investigate this function
+Value* value_clone(Value* val, Gc* gc) {
+    switch (val->tag) {
+        case VALUE_NATIVE:
+        case VALUE_NIL:
+        case VALUE_INTEGER:
+        case VALUE_REAL:
+            return value_alloc(*val, gc);
+
+        case VALUE_ERR: {
+            String old_msg = VALUE_GET(val, VALUE_ERR).msg;
+            String new_msg = string_clone_malloc(old_msg);
+            return value_alloc(VALUE_NEW(VALUE_ERR, {ERR, new_msg}), gc);
+        }
+
+        case VALUE_STR: {
+            String old_str = VALUE_GET(val, VALUE_STR);
+            String new_str = string_clone_malloc(old_str);
+            return value_alloc(VALUE_NEW(VALUE_STR, new_str), gc);
+        }
+            
+        case VALUE_SYM: {
+            String old_sym = VALUE_GET(val, VALUE_SYM);
+            String new_sym = string_clone_malloc(old_sym);
+            return value_alloc(VALUE_NEW(VALUE_SYM, new_sym), gc);
+        }
+
+        case VALUE_LIST: {
+            Value_Vec* old_vec = VALUE_GET(val, VALUE_LIST);
+            Value_Vec* new_vec = value_vec_new();
+
+            for (usize i = 0; i < old_vec->len; ++i) {
+                Value* v = value_clone(old_vec->at[i], gc);
+                value_vec_append(new_vec, v);
+            }
+
+            return value_alloc(VALUE_NEW(VALUE_LIST, new_vec), gc);
+        }
+
+        case VALUE_LAMBDA: {
+            Lambda* old_lambda = VALUE_GET(val, VALUE_LAMBDA);
+            Lambda* new_lambda = calloc(1, sizeof(Lambda));
+            *new_lambda = *old_lambda;
+            new_lambda->argc = old_lambda->argc,
+            new_lambda->params = calloc(1, sizeof(String) * old_lambda->argc);
+
+            for (usize i = 0; i < old_lambda->argc; ++i) {
+                new_lambda->params[i] = string_clone_malloc(old_lambda->params[i]);
+            }
+
+            new_lambda->body = ast_clone(old_lambda->body);
+            
+            return value_alloc(VALUE_NEW(VALUE_LAMBDA, new_lambda), gc);
+        }
+    }
+
+    // Let's not reach this one either, okay?
+    return value_alloc(VALUE_NEW(VALUE_NIL, 0), gc);
 }

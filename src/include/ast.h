@@ -29,6 +29,7 @@ struct AST {
         AST_SYM,
         AST_STR,
         AST_FN,
+        AST_IF,
     } tag;
 
     union {
@@ -52,12 +53,16 @@ struct AST {
 
         struct AST_FN
         { AST* params; AST_Vec* body; } AST_FN;
+
+        struct AST_IF
+        { AST* condition; AST* then_branch; AST* else_branch; } AST_IF;
     } data;
 
     bool eval;
 };
 
 AST* ast_new(AST ast);
+AST* ast_clone(AST* ast);
 void ast_print(AST* ast);
 Value* ast_eval(AST* ast, Env* env, Gc* gc);
 void ast_free(AST* ast);

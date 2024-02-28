@@ -306,6 +306,10 @@ Value* wisp_car (Gc* gc, Env* env, Value_Vec args) {
 
     Value_Vec* vec = VALUE_GET(args.at[0], VALUE_LIST);
 
+    if (vec->len == 0) {
+        RETURN_VALUE(VALUE_NEW(VALUE_NIL, 0), gc);
+    }
+
     RETURN_VALUE(*vec->at[0], gc);
 }
 
@@ -324,4 +328,24 @@ Value* wisp_cdr (Gc* gc, Env* env, Value_Vec args) {
     }
 
     RETURN_VALUE(VALUE_NEW(VALUE_LIST, vec), gc);
+}
+
+Value* wisp_append (Gc* gc, Env* env, Value_Vec args) {
+    (void)env;
+    if (args.len < 2 || args.at[0]->tag != VALUE_LIST) {
+        RETURN_VALUE(VALUE_NEW(VALUE_NIL, 0), gc);
+    }
+
+    Value_Vec* vec = VALUE_GET(args.at[0], VALUE_LIST);
+    Value_Vec* new_vec = value_vec_new();
+
+    for (usize i = 0; i < vec->len; ++i) {
+        value_vec_append(new_vec, vec->at[i]);
+    }
+
+    for (usize i = 1; i < args.len; ++i) {
+        value_vec_append(new_vec, args.at[i]);
+    }
+
+    RETURN_VALUE(VALUE_NEW(VALUE_LIST, new_vec), gc);
 }

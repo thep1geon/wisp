@@ -18,6 +18,7 @@ static AST* parse_list(Parser* p);
 static AST* parse_fn(Parser* p);
 static AST* parse_def(Parser* p);
 static AST* parse_let(Parser* p);
+static AST* parse_if(Parser* p);
 
 
 static void parser_advance(Parser* p) {
@@ -62,10 +63,22 @@ static AST* parse_fn(Parser* p) {
     AST_Vec* body = ast_vec_new();
     while (p->curr.type != Token_RParen) {
         ast_vec_append(body, parse_form(p));
+        parser_advance(p);
     }
-    parser_advance(p);
 
     return AST_NEW(AST_FN, params, body);
+}
+
+static AST* parse_if(Parser* p) {
+    parser_advance(p);
+    AST* condition = parse_form(p);
+    parser_advance(p);
+    AST* then_branch = parse_form(p);
+    parser_advance(p);
+    AST* else_branch = parse_form(p);
+    parser_advance(p);
+
+    return AST_NEW(AST_IF, condition, then_branch, else_branch);
 }
 
 static AST* parse_def(Parser* p) {

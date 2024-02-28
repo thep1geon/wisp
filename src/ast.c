@@ -92,6 +92,22 @@ void ast_print(AST* ast) {
 
             break;
         }
+        case AST_IF: {
+            struct AST_IF data = ast->data.AST_IF;
+            printf("(if ");
+            printf("(");
+            ast_print(data.condition);
+            printf(") ");
+            printf("(");
+            ast_print(data.then_branch);
+            printf(") ");
+            printf("(");
+            ast_print(data.else_branch);
+            printf(") ");
+            printf(")");
+
+            break;
+        }
         case AST_NUMBER: {
             struct AST_NUMBER data = ast->data.AST_NUMBER;
             printf("(INTEGER %d)", data.val);
@@ -170,6 +186,8 @@ Value* ast_eval(AST* ast, Env* env, Gc* gc) {
 
                 if (gc->mode == INTERPRET) {
                     gc_collect(gc, env);
+                    gc_collect(gc, env);
+                    gc_collect(gc, env);
                 }
             }
 
@@ -181,16 +199,15 @@ Value* ast_eval(AST* ast, Env* env, Gc* gc) {
             // Treat the first symbol in a list as a function
             
             if (data.vec->len == 0) {
-                ast_free(ast);
-                Value* v = value_alloc(VALUE_NEW(VALUE_NIL, 0), gc);
-                return v;
+                Value_Vec* vec = value_vec_new();
+                return value_alloc(VALUE_NEW(VALUE_LIST, vec), gc);
             }
 
             Value* sym_val = ast_eval(data.vec->at[0], env, gc);
 
             union {
                 WispFunc native;
-                Lambda lambda;
+                Lambda* lambda;
             } func;
             if (sym_val->tag == VALUE_NATIVE) {
                 func.native = VALUE_GET(sym_val, VALUE_NATIVE);
@@ -210,7 +227,7 @@ Value* ast_eval(AST* ast, Env* env, Gc* gc) {
             if (sym_val->tag == VALUE_NATIVE) {
                 v = func.native(gc, env, *vec);
             } else {
-                v = lambda_call(&func.lambda, gc, env, vec);
+                v = lambda_call(func.lambda, gc, vec);
             }
 
             free(vec->at);
@@ -222,19 +239,24 @@ Value* ast_eval(AST* ast, Env* env, Gc* gc) {
             struct AST_FN data = ast->data.AST_FN;
             struct AST_LIST params = data.params->data.AST_LIST;
             AST* body = AST_NEW(AST_PROG, data.body);
-            Lambda lambda = {
-                .params = malloc(sizeof(String) * params.vec->len),
-                .argc = params.vec->len,
-                .body = body,
-            };
 
-            for (usize i = 0; i < lambda.argc; ++i) {
-                lambda.params[i] = string_malloc_str(params.vec->at[i]->data.AST_SYM.sym.data);
+            Lambda* lambda = calloc(1, sizeof(Lambda));
+            lambda->argc = params.vec->len;
+            lambda->body = body;
+            lambda->env = env_new(env);
+            lambda->params = calloc(1, sizeof(String) * params.vec->len);
+
+            for (usize i = 0; i < lambda->argc; ++i) {
+                lambda->params[i] = string_malloc_str(params.vec->at[i]->data.AST_SYM.sym.data);
             }
-            
+
             Value* v = value_alloc(VALUE_NEW(VALUE_LAMBDA, lambda), gc);
 
             return v;
+        }
+        case AST_IF: {
+            struct AST_IF data = ast->data.AST_IF;
+            return value_alloc(VALUE_NEW(VALUE_NIL, 0), gc);
         }
         case AST_NUMBER: {
             struct AST_NUMBER data = ast->data.AST_NUMBER;
@@ -250,8 +272,7 @@ Value* ast_eval(AST* ast, Env* env, Gc* gc) {
                 // TODO Figure out how to free all the memory
                 // when an unknown function is called and the
                 // program needs to crash
-                ast_free(ast);
-                Value* v = value_alloc(VALUE_NEW(VALUE_NIL, 0), gc);
+                Value *v = value_alloc(VALUE_NEW(VALUE_NIL, 0), gc);
                 return v;
             }
 
@@ -290,10 +311,19 @@ void ast_free(AST* ast) {
         }
         case AST_FN: {
             struct AST_FN data = ast->data.AST_FN;
-            struct AST_LIST params = data.params->data.AST_LIST;
 
             ast_free(data.params);
             free(ast);
+            return;
+        }
+        case AST_IF: {
+            struct AST_IF data = ast->data.AST_IF;
+
+            ast_free(data.condition);
+            ast_free(data.then_branch);
+            ast_free(data.else_branch);
+            free(ast);
+
             return;
         }
         case AST_LIST: {
@@ -331,3 +361,68 @@ void ast_free(AST* ast) {
     }
 }
 
+AST* ast_clone(AST* ast) {
+    switch (ast->tag) {
+        case AST_NIL:
+            return AST_NEW(AST_NIL, ast->data.AST_NIL.ptr);
+        case AST_NUMBER:
+            return AST_NEW(AST_NUMBER, ast->data.AST_NUMBER.val);
+        case AST_SYM: {
+            String copy = string_clone_malloc(ast->data.AST_SYM.sym);
+            return AST_NEW(AST_SYM, copy);
+        }
+        case AST_STR: {
+            String copy = string_clone_malloc(ast->data.AST_STR.str);
+            return AST_NEW(AST_STR, copy);
+        }
+        case AST_LIST: {
+            struct AST_LIST data = ast->data.AST_LIST;
+            AST_Vec* old_vec = data.vec; 
+            AST_Vec* new_vec = ast_vec_new();
+
+            for (usize i = 0; i < old_vec->len; ++i) {
+                AST* ast = ast_clone(old_vec->at[i]);
+                ast_vec_append(new_vec, ast);
+            }
+
+            return AST_NEW(AST_LIST, new_vec);
+        }
+
+        case AST_PROG: {
+            struct AST_PROG data = ast->data.AST_PROG;
+            AST_Vec* old_vec = data.vec; 
+            AST_Vec* new_vec = ast_vec_new();
+
+            for (usize i = 0; i < old_vec->len; ++i) {
+                AST* ast = ast_clone(old_vec->at[i]);
+                ast_vec_append(new_vec, ast);
+            }
+
+            return AST_NEW(AST_PROG, new_vec);
+        }
+
+        case AST_FN: {
+            struct AST_FN data = ast->data.AST_FN;
+            
+            AST_Vec* old_vec = data.body; 
+            AST_Vec* new_vec = ast_vec_new();
+
+            for (usize i = 0; i < old_vec->len; ++i) {
+                AST* ast = ast_clone(old_vec->at[i]);
+                ast_vec_append(new_vec, ast);
+            }
+
+            return AST_NEW(AST_FN, ast_clone(data.params), new_vec);
+        }
+        case AST_IF: {
+            struct AST_IF data = ast->data.AST_IF; 
+            return AST_NEW(AST_IF, 
+                           ast_clone(data.condition), 
+                           ast_clone(data.then_branch),
+                           ast_clone(data.else_branch));
+        }
+    }
+
+    // Let's not reach this, okay?
+    return AST_NEW(AST_NIL, 0);
+}

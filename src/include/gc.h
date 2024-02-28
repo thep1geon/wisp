@@ -3,7 +3,7 @@
 
 #include "value.h"
 
-#define GC_INITIAL_CAP 128
+#define GC_INITIAL_CAP 4
 
 typedef enum {
     AUTOMATIC,
